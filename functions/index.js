@@ -16,15 +16,24 @@ exports.helloWorld = functions.https.onRequest((request, response) => {
   response.send("Hello from Firebase!");
 });
 
-exports.getPosts = functions.https.onRequest((req, res) => {
+const express = require("express");
+const app = express();
+
+app.get("/posts", (req, res) => {
   admin
     .firestore()
     .collection("Posts")
+    .orderBy("createdAt", "desc")
     .get()
     .then(data => {
       let posts = [];
       data.forEach(doc => {
-        posts.push(doc.data());
+        posts.push({
+          postID: doc.id,
+          body: doc.data().body,
+          userHandle: doc.data().userHandle,
+          createdAt: doc.data().createdAt
+        });
       });
 
       return res.json(posts);
@@ -32,15 +41,11 @@ exports.getPosts = functions.https.onRequest((req, res) => {
     .catch(err => console.error(err));
 });
 
-exports.createPost = functions.https.onRequest((req, res) => {
-  if (req.method !== "POST") {
-    return req.status(400).json({ error: "Method is not allowed" });
-  }
-
+app.post("/posts", (req, res) => {
   const newPost = {
     body: req.body.body,
     userHandle: req.body.userHandle,
-    createdAt: admin.firestore.Timestamp.fromDate(new Date())
+    createdAt: new Date().toISOString()
   };
 
   admin
@@ -55,3 +60,5 @@ exports.createPost = functions.https.onRequest((req, res) => {
       console.error(err);
     });
 });
+
+exports.api = functions.https.onRequest(app);
