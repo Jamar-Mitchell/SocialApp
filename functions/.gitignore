@@ -8,6 +8,7 @@ yarn-debug.log*
 yarn-error.log*
 firebase-debug.log*
 
+./util/config.js
 # Firebase cache
 .firebase/
 

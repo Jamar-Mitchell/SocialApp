@@ -1,180 +1,21 @@
 const functions = require("firebase-functions");
 
-var admin = require("firebase-admin");
+const { getAllPosts } = require("./handlers/posts");
+const { postOne } = require("./handlers/posts");
+const { signUp, login } = require("./handlers/users");
 
-var serviceAccount = require("./serviceAccountKey.json");
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://mysocialapp-c68aa.firebaseio.com"
-});
-
-var config = {};
-
-// // Create and Deploy Your First Cloud Functions
-// // https://firebase.google.com/docs/functions/write-firebase-functions
-//
-exports.helloWorld = functions.https.onRequest((request, response) => {
-  response.send("Hello from Firebase!");
-});
+const FBAuth = require("./util/fbAuth");
 
 const express = require("express");
 const app = express();
 
-const firebase = require("firebase");
-firebase.initializeApp(config);
+//post routes
+app.get("/posts", getAllPosts);
 
-const db = admin.firestore();
+// User route
+app.post("/signup", signUp);
+app.post("/login", login);
 
-app.get("/posts", (req, res) => {
-  admin;
-  db.collection("Posts")
-    .orderBy("createdAt", "desc")
-    .get()
-    .then(data => {
-      let posts = [];
-      data.forEach(doc => {
-        posts.push({
-          postID: doc.id,
-          body: doc.data().body,
-          userHandle: doc.data().userHandle,
-          createdAt: doc.data().createdAt
-        });
-      });
+app.post("/posts", FBAuth, postOne);
 
-      return res.json(posts);
-    })
-    .catch(err => console.error(err));
-});
-
-app.post("/posts", (req, res) => {
-  const newPost = {
-    body: req.body.body,
-    userHandle: req.body.userHandle,
-    createdAt: new Date().toISOString()
-  };
-
-  admin;
-  db.collection("Posts")
-    .add(newPost)
-    .then(doc => {
-      res.json({ message: "document " + doc.id + " created succesfully" });
-    })
-    .catch(err => {
-      res.status(500).json({ error: "something went wrong" });
-      console.error(err);
-    });
-});
-
-const isEmail = email => {
-  const regEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-  if (email.match(regEx)) return true;
-  else return false;
-};
-const isEmpty = string => {
-  if (string.trim() === "") return true;
-  else return false;
-};
-// the signup route
-app.post("/signup", (req, res) => {
-  const newUser = {
-    email: req.body.email,
-    password: req.body.password,
-    confirmPassword: req.body.confirmPassword,
-    handle: req.body.handle
-  };
-
-  let errors = {};
-
-  if (isEmpty(newUser.email)) {
-    errors.email = "email must not be empty";
-  } else if (!isEmail(newUser.email)) {
-    errors.email = "it must be valid address";
-  }
-
-  if (isEmpty(newUser.password)) {
-    errors.password = "Must not be empty";
-  }
-
-  if (newUser.password !== newUser.confirmPassword) {
-    errors.confirmPassword = " Passwords must match!";
-  }
-
-  if (isEmpty(newUser.handle)) {
-    errors.handle = "Must not be empty";
-  }
-
-  if (Object.keys(errors).length > 0) return res.status(400).json(errors);
-
-  let token, userID;
-  db.doc("/users/" + newUser.handle)
-    .get()
-    .then(doc => {
-      if (doc.exists) {
-        return res
-          .status(400)
-          .json({ handle: "unfortunatley the handle is already taken " });
-      } else {
-        return firebase
-          .auth()
-          .createUserWithEmailAndPassword(newUser.email, newUser.password);
-      }
-    })
-    .then(data => {
-      userID = data.user.uid;
-      return data.user.getIdToken();
-    })
-    .then(idToken => {
-      token = idToken;
-      const userCredentials = {
-        handle: newUser.handle,
-        email: newUser.email,
-        createdAt: new Date().toISOString(),
-        userID
-      };
-      db.doc("/users/" + newUser.handle).set(userCredentials);
-    })
-    .then(() => {
-      return res.status(201).json({ token });
-    })
-    .catch(err => {
-      console.error(err);
-      if (err.code === "auth/email-already-in-use") {
-        return res.status(400).json({ email: "This email is in use" });
-      }
-      return res.status(500).json({ error: err.code });
-    });
-});
-
-app.post("/login", (req, res) => {
-  const user = {
-    email: req.body.email,
-    password: req.body.password
-  };
-
-  let errors = {};
-
-  if (isEmpty(user.email)) errors.email = "Must not be empty";
-  if (isEmpty(user.password)) errors.password = "Must not be empty";
-
-  if (Object.keys(errors).length > 0) return res.status(400).json(errors);
-  firebase
-    .auth()
-    .signInWithEmailAndPassword(user.email, user.password)
-    .then(data => {
-      return data.user.getIdToken();
-    })
-    .then(token => {
-      return res.json({ token });
-    })
-    .catch(err => {
-      console.error(err);
-      if ((err.code = "auth/wrong-password")) {
-        return res
-          .status(403)
-          .json({ general: "Wrong password, please try again" });
-      }
-      return res.status(500).json({ error: err.code });
-    });
-});
 exports.api = functions.https.onRequest(app);
